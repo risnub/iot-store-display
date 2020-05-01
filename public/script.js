@@ -7,9 +7,9 @@
 const nbOfElts = 750;
 
 // Declaration of an array of devices ids
-let devicesIds = [];
+let devicesIds = [ 'evmega-devpi'];
 // Declaration of an array of devices aliases 
-let devicesAliases = [];
+let devicesAliases = ['Evmega RPi 3B+'];
 // How these arrays will be generated in the code?
 // Devices ids and aliases are read at startup from a specific node of the Firebase
 // Realtime Database named 'devices-id'.
@@ -55,8 +55,13 @@ let devicesAliases = [];
 const temperaturePlotDiv = document.getElementById('temperaturePlot');
 const humidityPlotDiv = document.getElementById('humidityPlot');
 
-// Get a reference to Firebase Realime Database:
-const db = firebase.database();
+// Get a reference to Firebase Firestore Database:
+firebase.initializeApp({
+    apiKey: 'AIzaSyDgOGsnY6lh-tTwgY9a66HMDYgXHuHkLss',
+    authDomain: 'iot2analytics-275312.firebaseapp.com',
+    projectId: 'iot2analytics-275312'
+});
+const db = firebase.firestore();
 
 // Declaration of 3 objects named timestamps, temperatures and humidities
 let timestamps;
@@ -108,51 +113,42 @@ humidityLayout.title = '<b>Humidity live plot</b>';
 humidityLayout.yaxis.title = '<b>Humidity (%)</b>';
 
 // Okay, let's start!
-// Make ONCE an array of devices ids and devices aliases
-db.ref('devices-ids').once('value', (snapshot) => {
-    snapshot.forEach(childSnapshot => {
-        const childKey = childSnapshot.key;
-        devicesIds.push(childKey);
-        const childData = childSnapshot.val();
-        let deviceAlias;
-        if(childData == true) {
-            deviceAlias = childKey; // alias is 'esp32_1B2B04' for instance
-        } else {
-            deviceAlias = childData; // alias is 'outdoor' for instance
-        }
-        devicesAliases.push(deviceAlias);
-    });
-    //console.log(devicesAliases);
-    if (devicesIds.length != 0) {
-        // objects 1st property (an array) initialization...
-        timestamps = { [devicesIds[0]]: [] };
-        temperatures = { [devicesIds[0]]: [] };
-        humidities = { [devicesIds[0]]: [] };
-        // ...and the rest of properties (somme arrays) initialization
-        for (let i = 1; i < devicesIds.length; i++) {
-            timestamps[devicesIds[i]] = [];
-            temperatures[devicesIds[i]] = [];
-            humidities[devicesIds[i]] = [];
-        }
-        //console.log('At startup timestamps =', timestamps);
-        //console.log('At startup temperatures =', temperatures);
-    } else console.log('No device id was found.')
-})
-.then(() => { // We start building database nodes listeners only when we have devices ids.
+// Make an array of devices ids and devices aliases
+   
+//console.log(devicesAliases);
+if (devicesIds.length != 0) {
+    // objects 1st property (an array) initialization...
+    timestamps = { [devicesIds[0]]: [] };
+    temperatures = { [devicesIds[0]]: [] };
+    humidities = { [devicesIds[0]]: [] };
+    // ...and the rest of properties (somme arrays) initialization
+    for (let i = 1; i < devicesIds.length; i++) {
+        timestamps[devicesIds[i]] = [];
+        temperatures[devicesIds[i]] = [];
+        humidities[devicesIds[i]] = [];
+    }
+    //console.log('At startup timestamps =', timestamps);
+    //console.log('At startup temperatures =', temperatures);
+} else console.log('No device id was found.');
+
+try {
     for (let i = 0; i < devicesIds.length; i++) {
-        db.ref(`devices-telemetry/${devicesIds[i]}`).limitToLast(nbOfElts).on('value', ts_measures => {
-            //console.log(ts_measures.val());
-            // We reinitialize the arrays to welcome timestamps, temperatures and humidities values:
-            timestamps[devicesIds[i]] = [];
-            temperatures[devicesIds[i]] = [];
-            humidities[devicesIds[i]] = [];
-
-            ts_measures.forEach(ts_measure => {
-                timestamps[devicesIds[i]].push(moment(ts_measure.val().timestamp).format('YYYY-MM-DD HH:mm:ss'));
-                temperatures[devicesIds[i]].push(ts_measure.val().temperature);
-                humidities[devicesIds[i]].push(ts_measure.val().humidity);
+        //console.log(ts_measures.val());
+        // We reinitialize the arrays to welcome timestamps, temperatures and humidities values:
+        timestamps[devicesIds[i]] = [];
+        temperatures[devicesIds[i]] = [];
+        humidities[devicesIds[i]] = [];
+        db.collection('measurements').where('sensorID', '==', devicesIds[i])
+        .orderBy('timecollected', 'desc').limit(nbOfElts)
+        .get()
+        .then((querySnapshot) => {
+            querySnapshot.forEach((doc) => {
+                console.log(`${doc.id} => ${doc.data()}`);
+                measurements = doc.data();
+                timestamps[devicesIds[i]].push(moment(measurements.timecollected).format('YYYY-MM-DD HH:mm:ss'));
+                temperatures[devicesIds[i]].push(measurements.temperature); // TBC: string format OK?
+                humidities[devicesIds[i]].push(measurements.humidity); // TBC: string format OK?
             });
-
             // plotly.js: See https://plot.ly/javascript/getting-started/
             // Temperatures
             let temperatureTraces = []; // array of plotly temperature traces (n devices => n traces) 
@@ -167,6 +163,7 @@ db.ref('devices-ids').once('value', (snapshot) => {
             for (let i = 0; i < devicesIds.length; i++) {
                 temperatureData.push(temperatureTraces[i]);
             }
+            console.log('temperatureData:', temperatureData);
             Plotly.newPlot(temperaturePlotDiv, temperatureData, temperatureLayout, { responsive: true });
 
             // Humidities
@@ -182,10 +179,14 @@ db.ref('devices-ids').once('value', (snapshot) => {
             for (let i = 0; i < devicesIds.length; i++) {
                 humidityData.push(humidityTraces[i]);
             }
+            console.log('humidityData:', humidityData);
             Plotly.newPlot(humidityPlotDiv, humidityData, humidityLayout, { responsive: true });
+        })
+        .catch(err => {
+            console.error('Query error:', err);
         });
     }
-})
-.catch(err => {
-    console.err('An error occured:', err);
-});
+}
+catch(err){
+    console.error('An error occured:', err);
+}
