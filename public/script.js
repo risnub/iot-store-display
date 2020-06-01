@@ -56,12 +56,26 @@ const temperaturePlotDiv = document.getElementById('temperaturePlot');
 const humidityPlotDiv = document.getElementById('humidityPlot');
 
 // Get a reference to Firebase Firestore Database:
-firebase.initializeApp({
+var app = firebase.initializeApp({
     apiKey: 'AIzaSyDgOGsnY6lh-tTwgY9a66HMDYgXHuHkLss',
     authDomain: 'iot2analytics-275312.firebaseapp.com',
     projectId: 'iot2analytics-275312'
 });
-const db = firebase.firestore();
+
+app.auth().signInAnonymously()
+.catch((error) => {
+    console.log('Anonymous sign in error code', error.code, error.message);
+});
+
+app.auth().onAuthStateChanged((user) => {
+    if (user) {
+        console.log('Anonymous user', user.uid, 'logged in');
+    }
+    else {
+        console.log('Anonymous user logged out');
+    }
+})
+const db = firebase.firestore(app);
 
 // Declaration of 3 objects named timestamps, temperatures and humidities
 let timestamps;
