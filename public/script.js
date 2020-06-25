@@ -70,12 +70,13 @@ app.auth().signInAnonymously()
 app.auth().onAuthStateChanged((user) => {
     if (user) {
         console.log('Anonymous user', user.uid, 'logged in');
+        loadDataAndGraphIt();
     }
     else {
         console.log('Anonymous user logged out');
     }
 })
-const db = firebase.firestore(app);
+
 
 // Declaration of 3 objects named timestamps, temperatures and humidities
 let timestamps;
@@ -145,63 +146,66 @@ if (devicesIds.length != 0) {
     //console.log('At startup temperatures =', temperatures);
 } else console.log('No device id was found.');
 
-try {
-    for (let i = 0; i < devicesIds.length; i++) {
-        //console.log(ts_measures.val());
-        db.collection('measurements').where('sensorID', '==', devicesIds[i])
-        .orderBy('timecollected', 'desc').limit(nbOfElts)
-        .onSnapshot({
-            error: (error) => {
-                console.error('Query error:', error);
-                },
-            next: (querySnapshot) => {
-                // We reinitialize the arrays to welcome timestamps, temperatures and humidities values:
-                timestamps[devicesIds[i]] = [];
-                temperatures[devicesIds[i]] = [];
-                humidities[devicesIds[i]] = [];
-                querySnapshot.forEach((doc) => {
-                    console.log(`${doc.id} => ${doc.data()}`);
-                    measurements = doc.data();
-                    timestamps[devicesIds[i]].push(moment(measurements.timecollected).format('YYYY-MM-DD HH:mm:ss'));
-                    temperatures[devicesIds[i]].push(measurements.temperature); // TBC: string format OK?
-                    humidities[devicesIds[i]].push(measurements.humidity); // TBC: string format OK?
-                });
-                // plotly.js: See https://plot.ly/javascript/getting-started/
-                // Temperatures
-                let temperatureTraces = []; // array of plotly temperature traces (n devices => n traces) 
-                for (let i = 0; i < devicesIds.length; i++) {
-                    temperatureTraces[i] = {
-                        x: timestamps[devicesIds[i]],
-                        y: temperatures[devicesIds[i]],
-                        name: devicesAliases[i]
+function loadDataAndGraphIt() {
+    try {
+        const db = firebase.firestore(app);
+        for (let i = 0; i < devicesIds.length; i++) {
+            //console.log(ts_measures.val());
+            db.collection('measurements').where('sensorID', '==', devicesIds[i])
+            .orderBy('timecollected', 'desc').limit(nbOfElts)
+            .onSnapshot({
+                error: (error) => {
+                    console.error('Query error:', error);
+                    },
+                next: (querySnapshot) => {
+                    // We reinitialize the arrays to welcome timestamps, temperatures and humidities values:
+                    timestamps[devicesIds[i]] = [];
+                    temperatures[devicesIds[i]] = [];
+                    humidities[devicesIds[i]] = [];
+                    querySnapshot.forEach((doc) => {
+                        console.log(`${doc.id} => ${doc.data()}`);
+                        measurements = doc.data();
+                        timestamps[devicesIds[i]].push(moment(measurements.timecollected).format('YYYY-MM-DD HH:mm:ss'));
+                        temperatures[devicesIds[i]].push(measurements.temperature); // TBC: string format OK?
+                        humidities[devicesIds[i]].push(measurements.humidity); // TBC: string format OK?
+                    });
+                    // plotly.js: See https://plot.ly/javascript/getting-started/
+                    // Temperatures
+                    let temperatureTraces = []; // array of plotly temperature traces (n devices => n traces) 
+                    for (let i = 0; i < devicesIds.length; i++) {
+                        temperatureTraces[i] = {
+                            x: timestamps[devicesIds[i]],
+                            y: temperatures[devicesIds[i]],
+                            name: devicesAliases[i]
+                        }
                     }
-                }
-                let temperatureData = []; // last plotly object to build
-                for (let i = 0; i < devicesIds.length; i++) {
-                    temperatureData.push(temperatureTraces[i]);
-                }
-                console.log('temperatureData:', temperatureData);
-                Plotly.newPlot(temperaturePlotDiv, temperatureData, temperatureLayout, { responsive: true });
-    
-                // Humidities
-                let humidityTraces = []; // array of plotly humidity traces (n devices => n traces) 
-                for (let i = 0; i < devicesIds.length; i++) {
-                    humidityTraces[i] = {
-                        x: timestamps[devicesIds[i]],
-                        y: humidities[devicesIds[i]],
-                        name: devicesAliases[i]
+                    let temperatureData = []; // last plotly object to build
+                    for (let i = 0; i < devicesIds.length; i++) {
+                        temperatureData.push(temperatureTraces[i]);
                     }
+                    console.log('temperatureData:', temperatureData);
+                    Plotly.newPlot(temperaturePlotDiv, temperatureData, temperatureLayout, { responsive: true });
+        
+                    // Humidities
+                    let humidityTraces = []; // array of plotly humidity traces (n devices => n traces) 
+                    for (let i = 0; i < devicesIds.length; i++) {
+                        humidityTraces[i] = {
+                            x: timestamps[devicesIds[i]],
+                            y: humidities[devicesIds[i]],
+                            name: devicesAliases[i]
+                        }
+                    }
+                    let humidityData = []; // last plotly object to build
+                    for (let i = 0; i < devicesIds.length; i++) {
+                        humidityData.push(humidityTraces[i]);
+                    }
+                    console.log('humidityData:', humidityData);
+                    Plotly.newPlot(humidityPlotDiv, humidityData, humidityLayout, { responsive: true });
                 }
-                let humidityData = []; // last plotly object to build
-                for (let i = 0; i < devicesIds.length; i++) {
-                    humidityData.push(humidityTraces[i]);
-                }
-                console.log('humidityData:', humidityData);
-                Plotly.newPlot(humidityPlotDiv, humidityData, humidityLayout, { responsive: true });
-            }
-        });
+            });
+        }
     }
-}
-catch(err){
-    console.error('An error occured:', err);
+    catch(err){
+        console.error('An error occured:', err);
+    }    
 }
